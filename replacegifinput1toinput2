@@ -1,0 +1,99 @@
+from PIL import Image, ImageSequence
+
+def merge_gifs_same_spot_custom(input1_path, input2_path, output_path,
+                                box_width=200, box_height=200,
+                                extra_width=50, extra_down=200,
+                                vertical_shift=200):
+    """
+    Crops a region from input1.gif and pastes it into input2.gif
+    at the exact same spot, with customizable width/height.
+    - box_width: base width of the box
+    - box_height: base height of the box
+    - extra_width: extra pixels added to width (equally on both sides)
+    - extra_down: extra pixels added BELOW the box (extends downward)
+    - vertical_shift: vertical offset from center
+    """
+
+    gif1 = Image.open(input1_path)
+    gif2 = Image.open(input2_path)
+
+    # Convert all gif2 frames to RGBA (clean full frames)
+    base_frames = [f.convert("RGBA") for f in ImageSequence.Iterator(gif2)]
+    frames = []
+
+    duration = gif2.info.get("duration", 100)
+    gif1 = Image.open(input1_path)
+
+    for i, base in enumerate(base_frames):
+        gif1.seek(i % gif1.n_frames)
+        src = gif1.convert("RGBA")
+
+        w1, h1 = src.size
+        w2, h2 = base.size
+
+        # Compute SAME SPOT in BOTH gifs
+        def custom_box(w, h, width, height, shift, extra_w, extra_d):
+            cx = w // 2
+            cy = h // 2 + shift
+            half_w = (width + extra_w) // 2
+            top = cy - height // 2
+            bottom = top + height + extra_d  # extend downward
+            return (cx - half_w, top, cx + half_w, bottom)
+
+        box1 = custom_box(w1, h1, box_width, box_height, vertical_shift, extra_width, extra_down)
+        box2 = custom_box(w2, h2, box_width, box_height, vertical_shift, extra_width, extra_down)
+
+        # Clamp boxes to bounds
+        def clamp_box(box, w, h):
+            l, t, r, b = box
+            l = max(0, min(l, w))
+            t = max(0, min(t, h))
+            r = max(0, min(r, w))
+            b = max(0, min(b, h))
+            return (l, t, r, b)
+
+        box1c = clamp_box(box1, w1, h1)
+        box2c = clamp_box(box2, w2, h2)
+
+        # Match dimensions between both GIFs
+        w_box1 = box1c[2] - box1c[0]
+        h_box1 = box1c[3] - box1c[1]
+        w_box2 = box2c[2] - box2c[0]
+        h_box2 = box2c[3] - box2c[1]
+        w_common = min(w_box1, w_box2)
+        h_common = min(h_box1, h_box2)
+
+        if w_common <= 0 or h_common <= 0:
+            frames.append(base.copy())
+            continue
+
+        box1c = (box1c[0], box1c[1], box1c[0] + w_common, box1c[1] + h_common)
+        box2c = (box2c[0], box2c[1], box2c[0] + w_common, box2c[1] + h_common)
+
+        # Crop from gif1
+        region = src.crop(box1c)
+
+        # Paste into gif2
+        out = base.copy()
+        out.paste(region, (box2c[0], box2c[1]), region)
+        frames.append(out)
+
+    # Save clean animation
+    frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=duration,
+        loop=0,
+        disposal=2
+    )
+
+# Usage Example:
+merge_gifs_same_spot_custom(
+    "input1.gif", "input2.gif", "output.gif",
+    box_width=200,   # Base width
+    box_height=200,  # Base height
+    extra_width=50,  # Add 50px wider horizontally
+    extra_down=200,  # Extend 200px more downward
+    vertical_shift=200
+)

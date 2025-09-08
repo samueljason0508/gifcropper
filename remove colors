@@ -1,0 +1,9 @@
+magick in.gif -coalesce -alpha on -fuzz 8% \
+  -transparent "#0c64c4" -transparent "#0c54b2" -transparent "#1d60ab" \
+  -transparent "#0e64bc" -transparent "#0c5cbc" -transparent "#1458ac" \
+  -transparent "#0c5cb3" -transparent "#0454b4" -transparent "#0c54a4" \
+  -transparent "#0c6cc4" \
+  -background none \
+  -set dispose background \
+  -layers Optimize \
+  out.gif
